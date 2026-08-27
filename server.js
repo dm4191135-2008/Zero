@@ -3,6 +3,9 @@ const path = require('path');
 const app = express();
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(__dirname));
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 const models = ['llama-3.3-70b-versatile','llama-3.1-8b-instant'];
 async function groq(messages, key){
@@ -44,4 +47,6 @@ app.post('/api/groq/coach', async (req,res)=>{
 });
 
 const port=process.env.PORT||3000;
-app.listen(port,()=>console.log(`ZERO running on http://localhost:${port}`));
+app.listen(port, '0.0.0.0', () => {
+  console.log(`ZERO running on port ${port}`);
+});
