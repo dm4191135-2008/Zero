@@ -2,7 +2,7 @@ const app = document.querySelector('#app');
 
 // COLOCA AQUI O CAMINHO DO ÍCONE DA APP.
 // Ex.: assets/zero-icon.png
-const APP_ICON = 'zero-icon.png';
+const APP_ICON = 'ícone.png';
 
 const defaults = {
   name: '',
