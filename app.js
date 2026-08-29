@@ -1069,6 +1069,21 @@ async function startProjectFromHome() {
     created: now,
     updated: now,
     analysis,
+    stages: Array.isArray(analysis.roadmap) && analysis.roadmap.length
+      ? analysis.roadmap.slice(0, 4).map((stage, index) => ({
+          title: stage?.title || ['Ideia', 'Plano', 'Criar', 'Lançar'][index],
+          description: stage?.action || '',
+          goal: stage?.action || '',
+          deliverable: ''
+        }))
+      : [
+          { title: 'Ideia', description: 'Clarificar o conceito e o problema.', goal: 'Definir o que será criado.', deliverable: '' },
+          { title: 'Plano', description: 'Estruturar o MVP.', goal: 'Escolher as prioridades.', deliverable: '' },
+          { title: 'Criar', description: 'Construir a primeira versão.', goal: 'Ter um MVP funcional.', deliverable: '' },
+          { title: 'Lançar', description: 'Testar com utilizadores.', goal: 'Validar e melhorar.', deliverable: '' }
+        ],
+    step: 0,
+    answers: [],
     aiReady: true
   };
 

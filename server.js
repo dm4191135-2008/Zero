@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const path = require('path');
 
@@ -6,6 +8,14 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.static(__dirname));
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    groqConfigured: Boolean(process.env.GROQ_API_KEY),
+    port: Number(process.env.PORT || 3000)
+  });
+});
 
 const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
 
@@ -109,6 +119,53 @@ Score viability from 0 to 100 based on clarity of problem, plausibility of audie
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message || 'Could not analyze the idea.' });
+  }
+});
+
+
+
+app.post('/api/groq/coach', async (req, res) => {
+  const key = process.env.GROQ_API_KEY;
+  const { idea, name, type, stages, answers, step, lang } = req.body || {};
+
+  if (!key) return res.status(503).json({ error: 'GROQ_API_KEY is not configured on the server.' });
+  if (!String(idea || '').trim()) return res.status(400).json({ error: 'Idea is required.' });
+
+  const currentStep = Math.max(0, Math.min(3, Number(step) || 0));
+  const language = languageName(lang || 'pt');
+
+  try {
+    const data = await groq([
+      {
+        role: 'system',
+        content: `You are ZERO, a practical project-building coach. Respond ONLY with valid JSON in ${language}.
+
+The user has already provided a project idea. Do not ask a long list of questions. Use the current answer and existing project context to improve the current stage and prepare the next stage.
+
+Return exactly:
+{
+  "stage":{"title":"short stage title","description":"clear practical description","goal":"what should be achieved","deliverable":"concrete output"},
+  "nextStage":{"title":"short next stage title","description":"clear practical description","goal":"what should be achieved","deliverable":"concrete output"},
+  "coachMessage":"one short useful message"
+}
+
+Be specific to the project. Do not invent factual market data.`
+      },
+      {
+        role: 'user',
+        content: JSON.stringify({
+          project: { idea, name, type },
+          currentStage: stages?.[currentStep] || {},
+          allStages: Array.isArray(stages) ? stages : [],
+          answers: Array.isArray(answers) ? answers : [],
+          step: currentStep
+        })
+      }
+    ], key);
+
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Could not coach the project.' });
   }
 });
 
