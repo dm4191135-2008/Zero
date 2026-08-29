@@ -1,7 +1,7 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const express = require('express');
-const path = require('path');
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -17,21 +17,35 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-const models = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
+const models = [
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant'
+];
 
 function languageName(lang) {
   return lang === 'en' ? 'English' : lang === 'fr' ? 'French' : 'Portuguese';
 }
 
+function getGroqKey() {
+  return String(process.env.GROQ_API_KEY || '').trim();
+}
+
 async function groq(messages, key) {
+  const cleanKey = String(key || '').trim();
+  if (!cleanKey) throw new Error('GROQ_API_KEY is missing. Check the .env file.');
+
   let last = 'Groq request failed.';
+
   for (const model of models) {
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 45000);
+
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${key}`
+          'Authorization': `Bearer ${cleanKey}`
         },
         body: JSON.stringify({
           model,
@@ -39,23 +53,73 @@ async function groq(messages, key) {
           max_tokens: 6500,
           messages,
           response_format: { type: 'json_object' }
-        })
+        }),
+        signal: controller.signal
       });
+
+      clearTimeout(timeout);
+
       const data = await response.json().catch(() => ({}));
+
       if (response.ok) {
-        const content = data?.choices?.[0]?.message?.content || '{}';
-        return JSON.parse(content);
+        const content = data?.choices?.[0]?.message?.content;
+        if (!content) throw new Error('Groq returned an empty response.');
+        try {
+          return JSON.parse(content);
+        } catch {
+          throw new Error('Groq returned invalid JSON.');
+        }
       }
-      last = data?.error?.message || last;
+
+      const message = data?.error?.message || `Groq returned HTTP ${response.status}.`;
+
+      // Authentication errors will fail for every model, so don't hide the
+      // real problem behind a second model attempt.
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(`Groq authentication error (${response.status}): ${message}`);
+      }
+
+      last = message;
     } catch (err) {
-      last = err.message || last;
+      last = err.name === 'AbortError'
+        ? 'Groq request timed out after 45 seconds.'
+        : (err.message || last);
+
+      if (/authentication error|HTTP 401|HTTP 403/i.test(last)) break;
     }
   }
+
   throw new Error(last);
 }
 
+app.get('/api/groq/test', async (req, res) => {
+  const key = getGroqKey();
+
+  if (!key) {
+    return res.status(503).json({
+      ok: false,
+      configured: false,
+      error: 'GROQ_API_KEY is missing. Put your key in Zero/.env.'
+    });
+  }
+
+  try {
+    await groq([
+      { role: 'user', content: 'Reply with exactly this JSON: {"ok":true}' }
+    ], key);
+
+    res.json({ ok: true, configured: true, message: 'Groq API key is working.' });
+  } catch (err) {
+    res.status(502).json({
+      ok: false,
+      configured: true,
+      error: err.message || 'Groq API test failed.'
+    });
+  }
+});
+
 app.post('/api/groq/analyze', async (req, res) => {
-  const key = process.env.GROQ_API_KEY;
+  const key = getGroqKey();
   const idea = String(req.body?.idea || '').trim();
   const lang = req.body?.lang || 'pt';
 
@@ -125,7 +189,7 @@ Score viability from 0 to 100 based on clarity of problem, plausibility of audie
 
 
 app.post('/api/groq/coach', async (req, res) => {
-  const key = process.env.GROQ_API_KEY;
+  const key = getGroqKey();
   const { idea, name, type, stages, answers, step, lang } = req.body || {};
 
   if (!key) return res.status(503).json({ error: 'GROQ_API_KEY is not configured on the server.' });

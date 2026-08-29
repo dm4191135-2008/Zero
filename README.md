@@ -17,3 +17,14 @@ The API key is read server-side and is not placed in the browser code. Do not co
 
 ## Important
 Competitor and market sections are AI knowledge estimates in this version; the app does not claim to perform live web research. Validate important market facts before making financial or business decisions.
+
+
+## Se aparecer "Verifica a tua API Groq"
+
+1. Confirma que o ficheiro `Zero/.env` existe e contém:
+   `GROQ_API_KEY=gsk_...`
+2. Inicia o projeto dentro da pasta `Zero` com `npm start`.
+3. Abre `http://localhost:3000/api/health` — deve mostrar `groqConfigured: true`.
+4. Abre `http://localhost:3000/api/groq/test` — deve confirmar se a chave realmente funciona.
+5. Se devolver `401`, a chave está inválida/expirada/revogada e é necessário criar uma nova chave Groq.
+6. Se devolver erro de rede/DNS, o computador não consegue chegar a `api.groq.com`.

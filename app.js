@@ -1045,11 +1045,12 @@ async function startProjectFromHome() {
       button.disabled = false;
       button.innerHTML = '<span>↑</span>';
     }
+    const msg = String(e?.message || '');
     toast(profile.lang === 'en'
-      ? 'Could not analyze the idea. Check your Groq API.'
+      ? `Could not analyze: ${msg || 'check your Groq API.'}`
       : profile.lang === 'fr'
-        ? 'Impossible d’analyser l’idée. Vérifie ton API Groq.'
-        : 'Não foi possível analisar a ideia. Verifica a tua API Groq.');
+        ? `Impossible d’analyser : ${msg || 'vérifie ton API Groq.'}`
+        : `Não foi possível analisar: ${msg || 'verifica a tua API Groq.'}`);
     return;
   }
 
