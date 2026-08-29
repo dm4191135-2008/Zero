@@ -2,7 +2,7 @@ const app = document.querySelector('#app');
 
 // COLOCA AQUI O CAMINHO DO ÍCONE DA APP.
 // Ex.: assets/zero-icon.png
-const APP_ICON = 'ícone.png';
+const APP_ICON = 'zero-icon.png';
 
 const defaults = {
   name: '',
@@ -50,7 +50,7 @@ const t = {
 
     greeting: 'Transforma ideias em realidade.',
     prompt: 'O que vais criar hoje?',
-    hint: 'Nome do projeto...',
+    hint: 'Descreve a tua ideia em poucas palavras...',
     startProject: 'Começar projeto',
 
     empty: 'Ainda não tens projetos.',
@@ -129,7 +129,7 @@ const t = {
 
     greeting: 'Turn ideas into reality.',
     prompt: 'What will you create today?',
-    hint: 'Project name...',
+    hint: 'Describe your idea in a few words...',
     startProject: 'Start project',
 
     empty: 'You have no projects yet.',
@@ -208,7 +208,7 @@ const t = {
 
     greeting: 'Transforme tes idées en réalité.',
     prompt: 'Que vas-tu créer aujourd’hui ?',
-    hint: 'Nom du projet...',
+    hint: 'Décris ton idée en quelques mots...',
     startProject: 'Commencer le projet',
 
     empty: 'Tu n’as encore aucun projet.',
@@ -1012,158 +1012,103 @@ function focusIdea() {
 }
 
 async function startProjectFromHome() {
-  const input =
-    document.querySelector('#homeIdea');
-
-  const idea =
-    input?.value.trim();
+  const input = document.querySelector('#homeIdea');
+  const idea = input?.value.trim();
 
   if (!idea) {
     input?.focus();
     return;
   }
 
-  const button =
-    document.querySelector('.idea-start');
-
+  const button = document.querySelector('.idea-start');
   if (button) {
     button.disabled = true;
-
-    button.innerHTML =
-      '<span class="spinner"></span>';
+    button.innerHTML = '<span class="spinner"></span>';
   }
 
-  let plan = null;
+  showAnalysisLoading(idea);
 
+  let analysis = null;
   try {
-    const res = await fetch(
-      '/api/groq/plan',
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type':
-            'application/json'
-        },
-        body: JSON.stringify({
-          idea,
-          lang: profile.lang
-        })
-      }
-    );
+    const res = await fetch('/api/groq/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idea, lang: profile.lang })
+    });
 
-    if (res.ok) {
-      plan = await res.json();
-    }
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(payload.error || 'Analysis failed');
+    analysis = payload;
   } catch (e) {
-    /*
-      Fallback local:
-      a app continua utilizável
-      mesmo sem a IA.
-    */
+    document.querySelector('#analysisLoading')?.remove();
+    if (button) {
+      button.disabled = false;
+      button.innerHTML = '<span>↑</span>';
+    }
+    toast(profile.lang === 'en'
+      ? 'Could not analyze the idea. Check your Groq API.'
+      : profile.lang === 'fr'
+        ? 'Impossible d’analyser l’idée. Vérifie ton API Groq.'
+        : 'Não foi possível analisar a ideia. Verifica a tua API Groq.');
+    return;
   }
 
-  const fallbackStages = [
-    {
-      title: L().idea,
-      description: L().step1,
-      question: L().firstStep
-    },
+  document.querySelector('#analysisLoading')?.remove();
+  if (button) {
+    button.disabled = false;
+    button.innerHTML = '<span>↑</span>';
+  }
 
-    {
-      title: L().plan,
-      description: L().step2,
-      question:
-        profile.lang === 'en'
-          ? 'What should the solution do first?'
-          : profile.lang === 'fr'
-            ? 'Que doit faire la solution en premier ?'
-            : 'O que a solução deve fazer primeiro?'
-    },
-
-    {
-      title: L().create,
-      description: L().step3,
-      question:
-        profile.lang === 'en'
-          ? 'What is the first version you can actually build?'
-          : profile.lang === 'fr'
-            ? 'Quelle est la première version que tu peux réellement construire ?'
-            : 'Qual é a primeira versão que consegues realmente construir?'
-    },
-
-    {
-      title: L().launch,
-      description: L().step4,
-      question:
-        profile.lang === 'en'
-          ? 'Who should use it first and how will you launch it?'
-          : profile.lang === 'fr'
-            ? 'Qui devrait l’utiliser en premier et comment vas-tu la lancer ?'
-            : 'Quem deve usar isto primeiro e como vais lançar?'
-    }
-  ];
-
+  const now = new Date().toISOString();
   const project = {
-    name:
-      plan?.name ||
-      idea.slice(0, 54),
-
+    id: crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: analysis.name || idea.slice(0, 54),
     idea,
-
-    type:
-      plan?.type ||
-      'Outro',
-
-    progress: 0,
-
-    created:
-      new Date().toISOString(),
-
-    step: 0,
-
-    stages:
-      Array.isArray(plan?.stages) &&
-      plan.stages.length
-        ? plan.stages.map(
-            (x, i) => ({
-              ...fallbackStages[i],
-              ...x
-            })
-          )
-        : fallbackStages,
-
-    answers: [],
-
-    aiReady: !!plan
+    type: analysis.type || 'Outro',
+    progress: 10,
+    created: now,
+    updated: now,
+    analysis,
+    aiReady: true
   };
 
   projects.push(project);
-
   activity.push({
-    title:
-      `${L().created}: ${project.name}`,
-
-    time:
-      new Date().toLocaleString(),
-
+    title: `${L().created}: ${project.name}`,
+    time: new Date().toLocaleString(),
     icon: '✦'
   });
 
   save();
-
   active = 'projects';
-
   projectsPage();
-
   toast(L().created);
 
-  setTimeout(
-    () =>
-      openProject(
-        projects.length - 1
-      ),
-    80
-  );
+  setTimeout(() => openProject(projects.length - 1), 80);
+}
+
+function showAnalysisLoading(idea) {
+  document.querySelector('#analysisLoading')?.remove();
+  const labels = profile.lang === 'en'
+    ? ['Understanding your idea', 'Mapping the market', 'Finding competitors', 'Building your roadmap']
+    : profile.lang === 'fr'
+      ? ['Comprendre ton idée', 'Analyser le marché', 'Identifier les concurrents', 'Créer ta feuille de route']
+      : ['A entender a tua ideia', 'A analisar o mercado', 'A encontrar concorrentes', 'A criar o teu caminho'];
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay analysis-loading" id="analysisLoading">
+      <div class="analysis-loading-card">
+        <div class="analysis-orbit"><span></span><b>ZERO</b></div>
+        <div class="micro">ZERO AI</div>
+        <h2>${profile.lang === 'en' ? 'Turning your idea into a project.' : profile.lang === 'fr' ? 'Transformer ton idée en projet.' : 'A transformar a tua ideia num projeto.'}</h2>
+        <p>${escapeHtml(idea)}</p>
+        <div class="analysis-tasks">
+          ${labels.map((x, i) => `<div class="analysis-task"><i>${i + 1}</i><span>${escapeHtml(x)}</span><em></em></div>`).join('')}
+        </div>
+        <small>${profile.lang === 'en' ? 'You only gave the idea. ZERO does the heavy work.' : profile.lang === 'fr' ? 'Tu as donné seulement l’idée. ZERO fait le travail.' : 'Tu deste apenas a ideia. A ZERO faz o trabalho pesado.'}</small>
+      </div>
+    </div>
+  `);
 }
 
 function renderProjectStages(p) {
@@ -1241,173 +1186,91 @@ function renderProjectStages(p) {
 
 function openProject(i) {
   const p = projects[i];
+  if (!p || !p.name) return;
 
-  if (!p || !p.name) {
-    return;
-  }
-
+  const a = p.analysis || {};
   const l = L();
+  const labels = {
+    summary: profile.lang === 'en' ? 'Project' : profile.lang === 'fr' ? 'Projet' : 'Projeto',
+    problem: profile.lang === 'en' ? 'Problem & opportunity' : profile.lang === 'fr' ? 'Problème & opportunité' : 'Problema & oportunidade',
+    audience: profile.lang === 'en' ? 'Audience' : profile.lang === 'fr' ? 'Public' : 'Público',
+    solution: profile.lang === 'en' ? 'Solution' : profile.lang === 'fr' ? 'Solution' : 'Solução',
+    features: profile.lang === 'en' ? 'Core features' : profile.lang === 'fr' ? 'Fonctionnalités clés' : 'Funcionalidades principais',
+    market: profile.lang === 'en' ? 'Market' : profile.lang === 'fr' ? 'Marché' : 'Mercado',
+    competitors: profile.lang === 'en' ? 'Competitors' : profile.lang === 'fr' ? 'Concurrents' : 'Concorrência',
+    swot: profile.lang === 'en' ? 'SWOT analysis' : profile.lang === 'fr' ? 'Analyse SWOT' : 'Análise FOFA',
+    business: profile.lang === 'en' ? 'Business model' : profile.lang === 'fr' ? 'Modèle économique' : 'Modelo de negócio',
+    roadmap: profile.lang === 'en' ? 'Roadmap' : profile.lang === 'fr' ? 'Feuille de route' : 'Plano de ação',
+    risks: profile.lang === 'en' ? 'Risks' : profile.lang === 'fr' ? 'Risques' : 'Riscos',
+    first: profile.lang === 'en' ? 'First move' : profile.lang === 'fr' ? 'Premier pas' : 'Primeiro passo'
+  };
 
-  const current =
-    Math.min(
-      Number(p.step) || 0,
-      3
-    );
+  const list = (items, empty='—') => Array.isArray(items) && items.length
+    ? `<ul>${items.map(x => `<li>${escapeHtml(typeof x === 'string' ? x : (x.name || x.title || x.text || ''))}</li>`).join('')}</ul>`
+    : `<p class="muted-inline">${empty}</p>`;
 
-  const stage =
-    p.stages?.[current] || {};
+  const competitors = Array.isArray(a.competitors) ? a.competitors : [];
+  const roadmap = Array.isArray(a.roadmap) ? a.roadmap : [];
+  const features = Array.isArray(a.coreFeatures) ? a.coreFeatures : [];
+  const strengths = Array.isArray(a.swot?.strengths) ? a.swot.strengths : [];
+  const weaknesses = Array.isArray(a.swot?.weaknesses) ? a.swot.weaknesses : [];
+  const opportunities = Array.isArray(a.swot?.opportunities) ? a.swot.opportunities : [];
+  const threats = Array.isArray(a.swot?.threats) ? a.swot.threats : [];
 
-  document.body.insertAdjacentHTML(
-    'beforeend',
-    `
-      <div
-        class="overlay project-overlay"
-        id="projectOverlay"
-      >
-
-        <div class="project-detail">
-
-          <div class="detail-head">
-
-            <button
-              class="detail-back"
-              onclick="
-                document
-                  .querySelector('#projectOverlay')
-                  ?.remove()
-              "
-            >
-              ← ${l.back}
-            </button>
-
-            <div class="detail-actions">
-
-              <button
-                class="delete-project"
-                onclick="
-                  deleteProject(${i})
-                "
-                aria-label="${l.deleteProject}"
-                title="${l.deleteProject}"
-              >
-                ⌫
-              </button>
-
-              <button
-                class="detail-close"
-                onclick="
-                  document
-                    .querySelector('#projectOverlay')
-                    ?.remove()
-                "
-              >
-                ×
-              </button>
-
-            </div>
-
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay project-overlay" id="projectOverlay">
+      <div class="project-detail project-analysis-detail">
+        <div class="detail-head">
+          <button class="detail-back" onclick="document.querySelector('#projectOverlay')?.remove()">← ${l.back}</button>
+          <div class="detail-actions">
+            <button class="delete-project" onclick="deleteProject(${i})" aria-label="${l.deleteProject}" title="${l.deleteProject}">⌫</button>
+            <button class="detail-close" onclick="document.querySelector('#projectOverlay')?.remove()">×</button>
           </div>
-
-          <div class="detail-symbol">
-            ${symbolFor(p.type)}
-          </div>
-
-          <div class="micro">
-            ${escapeHtml(
-              p.type ||
-              l.newProject
-            )}
-          </div>
-
-          <h2>
-            ${escapeHtml(p.name)}
-          </h2>
-
-          <p>
-            ${escapeHtml(
-              p.idea || ''
-            )}
-          </p>
-
-          <div class="steps">
-            ${renderProjectStages(p)}
-          </div>
-
-          <div class="detail-progress">
-            <div
-              style="
-                width:${current / 3 * 100}%
-              "
-            ></div>
-          </div>
-
-          <section class="coach">
-
-            <div class="micro">
-              ZERO COACH
-            </div>
-
-            <h3>
-              ${escapeHtml(
-                stage.title ||
-                l.idea
-              )}
-            </h3>
-
-            <p>
-              ${escapeHtml(
-                stage.question ||
-                l.firstStep
-              )}
-            </p>
-
-            <textarea
-              id="coachAnswer"
-              placeholder="${
-                profile.lang === 'en'
-                  ? 'Write your answer...'
-                  : profile.lang === 'fr'
-                    ? 'Écris ta réponse...'
-                    : 'Escreve a tua resposta...'
-              }"
-            >${escapeHtml(
-              p.answers?.[current] ||
-              ''
-            )}</textarea>
-
-            <button
-              class="next-step"
-              onclick="
-                submitCoach(${i})
-              "
-            >
-
-              <span>
-                ${
-                  current >= 3
-                    ? l.launch
-                    : l.next
-                }
-              </span>
-
-              <b>
-                ${
-                  current >= 3
-                    ? l.begin
-                    : l.continue
-                }
-                →
-              </b>
-
-            </button>
-
-          </section>
-
         </div>
 
+        <div class="detail-symbol">${symbolFor(p.type)}</div>
+        <div class="micro">${escapeHtml(p.type || labels.summary)}</div>
+        <h2>${escapeHtml(p.name)}</h2>
+        <p>${escapeHtml(p.idea)}</p>
+
+        <div class="analysis-score-row">
+          <div class="analysis-score">
+            <strong>${escapeHtml(String(a.viabilityScore ?? '—'))}</strong>
+            <span>/100</span>
+          </div>
+          <div><b>${escapeHtml(a.verdict || (profile.lang === 'en' ? 'Ready to explore' : profile.lang === 'fr' ? 'Prêt à explorer' : 'Pronta para explorar'))}</b><small>${escapeHtml(a.scoreReason || '')}</small></div>
+        </div>
+
+        <div class="analysis-grid">
+          <section class="analysis-card analysis-wide"><div class="micro">${labels.summary}</div><h3>${escapeHtml(a.concept || '')}</h3><p>${escapeHtml(a.summary || '')}</p></section>
+          <section class="analysis-card"><div class="micro">${labels.problem}</div><h3>${escapeHtml(a.problem || '')}</h3><p>${escapeHtml(a.opportunity || '')}</p></section>
+          <section class="analysis-card"><div class="micro">${labels.audience}</div><h3>${escapeHtml(a.targetAudience || '')}</h3><p>${escapeHtml(a.audienceNeed || '')}</p></section>
+          <section class="analysis-card analysis-wide"><div class="micro">${labels.solution}</div><h3>${escapeHtml(a.solution || '')}</h3><p>${escapeHtml(a.differentiator || '')}</p></section>
+          <section class="analysis-card analysis-wide"><div class="micro">${labels.features}</div>${list(features)}</section>
+
+          <section class="analysis-card analysis-wide"><div class="micro">${labels.market}</div><h3>${escapeHtml(a.market?.summary || '')}</h3><div class="metric-row"><span><b>${escapeHtml(a.market?.size || '—')}</b><small>Mercado</small></span><span><b>${escapeHtml(a.market?.trend || '—')}</b><small>Tendência</small></span><span><b>${escapeHtml(a.market?.entry || '—')}</b><small>Entrada</small></span></div></section>
+
+          <section class="analysis-card analysis-wide"><div class="micro">${labels.competitors}</div><div class="competitor-list">${competitors.length ? competitors.map(c => `<article><div class="competitor-icon">◈</div><div><b>${escapeHtml(c.name || '')}</b><p>${escapeHtml(c.description || '')}</p><small>${escapeHtml(c.weakness || '')}</small></div></article>`).join('') : '<p class="muted-inline">—</p>'}</div></section>
+
+          <section class="analysis-card analysis-wide"><div class="micro">${labels.swot}</div><div class="swot-grid">
+            <div><b>S</b><h4>Forças</h4>${list(strengths)}</div>
+            <div><b>W</b><h4>Fraquezas</h4>${list(weaknesses)}</div>
+            <div><b>O</b><h4>Oportunidades</h4>${list(opportunities)}</div>
+            <div><b>T</b><h4>Ameaças</h4>${list(threats)}</div>
+          </div></section>
+
+          <section class="analysis-card"><div class="micro">${labels.business}</div><h3>${escapeHtml(a.businessModel?.recommendation || '')}</h3>${list(a.businessModel?.revenueStreams)}</section>
+          <section class="analysis-card"><div class="micro">${labels.risks}</div>${list(a.risks)}</section>
+
+          <section class="analysis-card analysis-wide"><div class="micro">${labels.roadmap}</div><div class="roadmap">${roadmap.length ? roadmap.map((r, idx) => `<div class="roadmap-item"><span>0${idx + 1}</span><div><b>${escapeHtml(r.title || '')}</b><p>${escapeHtml(r.action || r.description || '')}</p></div></div>`).join('') : '<p class="muted-inline">—</p>'}</div></section>
+
+          <section class="analysis-card analysis-wide first-move"><div class="micro">${labels.first}</div><h3>${escapeHtml(a.firstMove || '')}</h3><p>${escapeHtml(a.firstMoveWhy || '')}</p></section>
+        </div>
+
+        <div class="analysis-footer-note">${escapeHtml(a.disclaimer || (profile.lang === 'en' ? 'Market and competitor insights are AI estimates and should be validated before investment decisions.' : profile.lang === 'fr' ? 'Les informations de marché et de concurrence sont des estimations IA et doivent être validées avant toute décision d’investissement.' : 'As informações de mercado e concorrência são estimativas da IA e devem ser validadas antes de decisões de investimento.'))}</div>
       </div>
-    `
-  );
+    </div>
+  `);
 }
 
 async function submitCoach(i) {
