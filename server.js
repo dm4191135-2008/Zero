@@ -17,9 +17,49 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-const models = [
-  'llama-3.3-70b-versatile'
+// Preferred models, in order. The server first checks which models the
+// current Groq project/key can actually access, so an unavailable model
+// does not break the whole ZERO analysis feature.
+const preferredModels = [
+  'openai/gpt-oss-120b',
+  'openai/gpt-oss-20b',
+  'llama-3.3-70b-versatile',
+  'llama-3.1-8b-instant'
 ];
+
+async function getAvailableModels(key) {
+  const response = await fetch('https://api.groq.com/openai/v1/models', {
+    headers: {
+      'Authorization': `Bearer ${key}`,
+      'Content-Type': 'application/json'
+    }
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const message = data?.error?.message || `Groq models request failed (HTTP ${response.status}).`;
+    throw new Error(message);
+  }
+
+  return Array.isArray(data?.data)
+    ? data.data.map(model => model?.id).filter(Boolean)
+    : [];
+}
+
+async function getModelsForKey(key) {
+  const available = await getAvailableModels(key);
+  const selected = preferredModels.filter(model => available.includes(model));
+
+  if (!selected.length) {
+    throw new Error(
+      'A tua chave Groq não tem acesso a nenhum dos modelos suportados pelo ZERO. ' +
+      'Verifica a chave, o projeto e as permissões de modelos no GroqCloud.'
+    );
+  }
+
+  return selected;
+}
 
 function languageName(lang) {
   return lang === 'en' ? 'English' : lang === 'fr' ? 'French' : 'Portuguese';
@@ -33,6 +73,7 @@ async function groq(messages, key) {
   const cleanKey = String(key || '').trim();
   if (!cleanKey) throw new Error('GROQ_API_KEY is missing. Check the .env file.');
 
+  const models = await getModelsForKey(cleanKey);
   let last = 'Groq request failed.';
 
   for (const model of models) {
@@ -40,7 +81,7 @@ async function groq(messages, key) {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 45000);
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      let response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -58,24 +99,51 @@ async function groq(messages, key) {
 
       clearTimeout(timeout);
 
-      const data = await response.json().catch(() => ({}));
+      let data = await response.json().catch(() => ({}));
+
+      // Some model/account combinations can reject JSON mode. Retry the
+      // same model without response_format before moving to another model.
+      if (!response.ok && response.status === 400) {
+        const retryController = new AbortController();
+        const retryTimeout = setTimeout(() => retryController.abort(), 45000);
+
+        response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${cleanKey}`
+          },
+          body: JSON.stringify({
+            model,
+            temperature: 0.35,
+            max_tokens: 6500,
+            messages
+          }),
+          signal: retryController.signal
+        });
+
+        clearTimeout(retryTimeout);
+        data = await response.json().catch(() => ({}));
+      }
 
       if (response.ok) {
         const content = data?.choices?.[0]?.message?.content;
         if (!content) throw new Error('Groq returned an empty response.');
+
         try {
           return JSON.parse(content);
         } catch {
+          // Try extracting a JSON object if the model wrapped it in text.
+          const match = String(content).match(/\{[\s\S]*\}/);
+          if (match) return JSON.parse(match[0]);
           throw new Error('Groq returned invalid JSON.');
         }
       }
 
       const message = data?.error?.message || `Groq returned HTTP ${response.status}.`;
 
-      // Authentication errors will fail for every model, so don't hide the
-      // real problem behind a second model attempt.
       if (response.status === 401 || response.status === 403) {
-        throw new Error(`Groq authentication error (${response.status}): ${message}`);
+        throw new Error(`Groq authentication/permission error (${response.status}): ${message}`);
       }
 
       last = message;
@@ -84,7 +152,7 @@ async function groq(messages, key) {
         ? 'Groq request timed out after 45 seconds.'
         : (err.message || last);
 
-      if (/authentication error|HTTP 401|HTTP 403/i.test(last)) break;
+      if (/authentication|permission|HTTP 401|HTTP 403/i.test(last)) break;
     }
   }
 
