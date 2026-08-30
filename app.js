@@ -1284,122 +1284,150 @@ function openProject(i) {
         </div>
 
         <div class="analysis-footer-note">${escapeHtml(a.disclaimer || (profile.lang === 'en' ? 'Market and competitor insights are AI estimates and should be validated before investment decisions.' : profile.lang === 'fr' ? 'Les informations de marché et de concurrence sont des estimations IA et doivent être validées avant toute décision d’investissement.' : 'As informações de mercado e concorrência são estimativas da IA e devem ser validadas antes de decisões de investimento.'))}</div>
-        <div class="next-level-cta">
+
+        <section class="zero-next-level-card">
           <div>
-            <span class="micro">ZERO • ${profile.lang === 'en' ? 'NEXT LEVEL' : profile.lang === 'fr' ? 'NIVEAU SUIVANT' : 'PRÓXIMO NÍVEL'}</span>
-            <b>${profile.lang === 'en' ? 'Let ZERO finish the project with you.' : profile.lang === 'fr' ? 'Laisse ZERO terminer le projet avec toi.' : 'Deixa a ZERO levar o projeto até ao fim contigo.'}</b>
-            <small>${profile.lang === 'en' ? 'Choose instead of typing: name, positioning, differentiation, marketing, business model and launch.' : profile.lang === 'fr' ? 'Choisis au lieu d’écrire : nom, positionnement, différenciation, marketing, modèle économique et lancement.' : 'Escolhe em vez de escrever: nome, posicionamento, diferenciação, marketing, modelo de negócio e lançamento.'}</small>
+            <div class="micro">ZERO · PRÓXIMO NÍVEL</div>
+            <h3>${profile.lang === 'en' ? 'Keep building your project' : profile.lang === 'fr' ? 'Continue à construire ton projet' : 'Continua a construir o teu projeto'}</h3>
+            <p>${profile.lang === 'en' ? 'ZERO will guide you through the next decisions. You only choose; ZERO does the work.' : profile.lang === 'fr' ? 'ZERO te guide à travers les prochaines décisions. Tu choisis seulement ; ZERO fait le travail.' : 'A ZERO vai guiar-te pelas próximas decisões. Tu só escolhes; a ZERO faz o trabalho.'}</p>
           </div>
-          <button class="next-level-button" onclick="openNextLevel(${i})"><span>→</span>${profile.lang === 'en' ? 'Continue' : profile.lang === 'fr' ? 'Continuer' : 'Passar para o próximo nível'}</button>
-        </div>
+          <button class="primary-next-level" onclick="openNextLevel(${i}, ${Number(p.levelStep || 0)})">
+            <span>${profile.lang === 'en' ? 'Next level' : profile.lang === 'fr' ? 'Niveau suivant' : 'Passar para o próximo nível'}</span><b>→</b>
+          </button>
+        </section>
       </div>
     </div>
   `);
 }
 
+async function openNextLevel(i, requestedStep) {
+  const p = projects[i];
+  if (!p) return;
 
-const NEXT_LEVELS = [
-  { key:'name', icon:'✦' },
-  { key:'positioning', icon:'◎' },
-  { key:'differentiator', icon:'◆' },
-  { key:'marketing', icon:'↗' },
-  { key:'business', icon:'◉' },
-  { key:'launch', icon:'→' }
-];
+  const step = Math.max(0, Math.min(6, Number(requestedStep ?? p.levelStep ?? 0)));
+  p.levelStep = step;
+  p.choices = p.choices || {};
+  save();
 
-function nextLevelText(key){
-  const pt={
-    name:['Escolhe o nome','A ZERO criou opções pensadas para este projeto. Escolhe a que melhor combina contigo.','Escolhe um nome'],
-    positioning:['Define o posicionamento','Agora vamos decidir como o projeto deve ser percebido pelas pessoas.','Escolhe o posicionamento'],
-    differentiator:['Cria a diferença','Vamos transformar a ideia numa vantagem clara perante alternativas existentes.','Escolhe o diferencial'],
-    marketing:['Monta o marketing','A ZERO sugere uma forma simples de chegar às primeiras pessoas.','Escolhe a estratégia'],
-    business:['Decide como ganhar dinheiro','Escolhe o modelo que faz mais sentido para começar sem complicar.','Escolhe o modelo'],
-    launch:['Prepara o lançamento','Última escolha: como colocar o projeto no mundo e começar a validar.','Escolhe o plano de lançamento']
-  };
-  const en={
-    name:['Choose the name','ZERO created options designed for this project. Pick the one that fits best.','Choose a name'],
-    positioning:['Define the positioning','Now decide how people should perceive the project.','Choose the positioning'],
-    differentiator:['Create the difference','Turn the idea into a clear advantage over existing alternatives.','Choose the differentiator'],
-    marketing:['Build the marketing','ZERO suggests a simple way to reach the first people.','Choose the strategy'],
-    business:['Choose how to make money','Pick the model that makes the most sense to start without unnecessary complexity.','Choose the model'],
-    launch:['Prepare the launch','One last choice: how to put the project into the world and start validating it.','Choose the launch plan']
-  };
-  const fr={
-    name:['Choisis le nom','ZERO a créé des options pensées pour ce projet. Choisis celle qui te correspond le mieux.','Choisir un nom'],
-    positioning:['Définis le positionnement','Décide maintenant comment le projet doit être perçu.','Choisir le positionnement'],
-    differentiator:['Crée la différence','Transforme l’idée en avantage clair face aux alternatives existantes.','Choisir le différenciateur'],
-    marketing:['Construis le marketing','ZERO propose une façon simple d’atteindre les premières personnes.','Choisir la stratégie'],
-    business:['Décide comment gagner de l’argent','Choisis le modèle le plus logique pour commencer sans complexité inutile.','Choisir le modèle'],
-    launch:['Prépare le lancement','Dernier choix : comment mettre le projet dans le monde et commencer à le valider.','Choisir le lancement']
-  };
-  return (profile.lang==='en'?en:profile.lang==='fr'?fr:pt)[key] || pt[key];
-}
+  const labels = profile.lang === 'en'
+    ? ['Creating name options…','Finding the best positioning…','Designing your differentiator…','Building your marketing plan…','Choosing a business model…','Preparing the launch…','Building your final plan…']
+    : profile.lang === 'fr'
+      ? ['Création des noms…','Recherche du positionnement…','Création du différenciateur…','Construction du marketing…','Choix du modèle économique…','Préparation du lancement…','Construction du plan final…']
+      : ['A criar opções de nome…','A encontrar o melhor posicionamento…','A criar o teu diferencial…','A montar o plano de marketing…','A escolher o modelo de negócio…','A preparar o lançamento…','A construir o plano final…'];
 
-async function openNextLevel(i){
-  const p=projects[i];
-  if(!p) return;
-  p.nextLevel=p.nextLevel||{level:0,choices:[],selections:{},final:null};
-  const level=Math.max(0,Math.min(6,Number(p.nextLevel.level)||0));
-  if(level>=6){ renderFinalBlueprint(i); return; }
-  document.querySelector('#nextLevelOverlay')?.remove();
-  const [title,desc,choose]=nextLevelText(NEXT_LEVELS[level].key);
-  document.body.insertAdjacentHTML('beforeend',`
-    <div class="overlay next-level-overlay" id="nextLevelOverlay">
-      <div class="next-level-card">
-        <div class="next-level-top">
-          <div><span class="micro">ZERO AI • ${level+1}/6</span><h2>${escapeHtml(title)}</h2><p>${escapeHtml(desc)}</p></div>
-          <button class="detail-close" onclick="document.querySelector('#nextLevelOverlay')?.remove()">×</button>
-        </div>
-        <div class="next-level-progress"><span style="width:${((level+1)/6)*100}%"></span></div>
-        <div class="choice-grid" id="nextLevelChoices"><div class="choice-loading"><span class="spinner"></span><b>${profile.lang==='en'?'ZERO is thinking…':profile.lang==='fr'?'ZERO réfléchit…':'A ZERO está a pensar…'}</b><small>${profile.lang==='en'?'Creating options specifically for your project.':profile.lang==='fr'?'Création d’options pour ton projet.':'A criar opções específicas para o teu projeto.'}</small></div></div>
+  document.querySelector('#levelOverlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay level-overlay" id="levelOverlay">
+      <div class="level-card level-loading-card">
+        <div class="analysis-orbit"><span></span><b>ZERO</b></div>
+        <div class="micro">NÍVEL ${step + 1} / 7</div>
+        <h2>${escapeHtml(labels[step])}</h2>
+        <p>${escapeHtml(p.name || p.idea)}</p>
+        <div class="level-progress"><span style="width:${Math.round((step / 7) * 100)}%"></span></div>
       </div>
     </div>`);
-  try{
-    const res=await fetch('/api/groq/next-level',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idea:p.idea,name:p.name,type:p.type,analysis:p.analysis,nextLevel:p.nextLevel,level,lang:profile.lang})});
-    const data=await res.json().catch(()=>({}));
-    if(!res.ok) throw new Error(data.error||'Falha ao gerar opções.');
-    p.nextLevel.choices=Array.isArray(data.choices)?data.choices:[];
-    const box=document.querySelector('#nextLevelChoices');
-    if(!box) return;
-    box.innerHTML=p.nextLevel.choices.length?p.nextLevel.choices.map((c,n)=>`<button class="choice-card" onclick="selectNextLevel(${i},${n})"><span class="choice-icon">${escapeHtml(c.icon||NEXT_LEVELS[level].icon)}</span><span><b>${escapeHtml(c.title||'Opção')}</b><small>${escapeHtml(c.description||'')}</small></span><em>→</em></button>`).join(''):`<div class="choice-loading"><b>${profile.lang==='en'?'No options were returned.':profile.lang==='fr'?'Aucune option reçue.':'Não foram recebidas opções.'}</b><small>${escapeHtml(data.message||'Tenta novamente.')}</small></div>`;
-  }catch(e){
-    const box=document.querySelector('#nextLevelChoices');
-    if(box) box.innerHTML=`<div class="choice-error"><b>${profile.lang==='en'?'Could not generate this level.':profile.lang==='fr'?'Impossible de générer ce niveau.':'Não foi possível gerar este nível.'}</b><small>${escapeHtml(e.message||'Verifica a tua API Groq.')}</small><button onclick="openNextLevel(${i})">${profile.lang==='en'?'Try again':profile.lang==='fr'?'Réessayer':'Tentar novamente'}</button></div>`;
+
+  try {
+    const res = await fetch('/api/groq/level', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: p, step, lang: profile.lang })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Não foi possível gerar o próximo nível.');
+    renderNextLevel(i, step, data);
+  } catch (e) {
+    document.querySelector('#levelOverlay')?.remove();
+    const wait = /rate limit|tokens per minute|TPM|try again|too many requests/i.test(String(e.message || ''));
+    toast(wait
+      ? (profile.lang === 'en' ? 'ZERO is taking a short break because the AI limit was reached. Try again in a moment.' : profile.lang === 'fr' ? 'ZERO fait une courte pause car la limite IA a été atteinte. Réessaie dans un instant.' : 'A ZERO fez uma pequena pausa porque o limite da IA foi atingido. Tenta novamente daqui a pouco.')
+      : (profile.lang === 'en' ? `Could not load this level: ${e.message}` : profile.lang === 'fr' ? `Impossible de charger ce niveau : ${e.message}` : `Não foi possível carregar este nível: ${e.message}`));
   }
 }
 
-async function selectNextLevel(i,n){
-  const p=projects[i]; if(!p?.nextLevel) return;
-  const level=Math.max(0,Math.min(5,Number(p.nextLevel.level)||0));
-  const choice=p.nextLevel.choices?.[n]; if(!choice) return;
-  p.nextLevel.selections[NEXT_LEVELS[level].key]=choice;
-  p.nextLevel.level=level+1;
+function renderNextLevel(i, step, data) {
+  const p = projects[i];
+  if (!p) return;
+  p.levels = p.levels || {};
+  p.levels[step] = data;
   save();
-  activity.push({title:`${p.name} · ${choice.title}`,time:new Date().toLocaleString(),icon:'✓'});
-  save();
-  if(level+1>=6){ document.querySelector('#nextLevelOverlay')?.remove(); await finalizeNextLevel(i); }
-  else openNextLevel(i);
+
+  const options = Array.isArray(data.options) ? data.options : [];
+  const completed = Object.keys(p.choices || {}).length;
+  const isFinal = step >= 6;
+  const nextText = profile.lang === 'en' ? 'Continue' : profile.lang === 'fr' ? 'Continuer' : 'Continuar';
+  const backText = profile.lang === 'en' ? 'Back to project' : profile.lang === 'fr' ? 'Retour au projet' : 'Voltar ao projeto';
+  const chooseText = profile.lang === 'en' ? 'Choose one' : profile.lang === 'fr' ? 'Choisis une option' : 'Escolhe uma opção';
+
+  document.querySelector('#levelOverlay')?.remove();
+  document.body.insertAdjacentHTML('beforeend', `
+    <div class="overlay level-overlay" id="levelOverlay">
+      <div class="level-card">
+        <div class="level-head">
+          <button class="detail-back" onclick="document.querySelector('#levelOverlay')?.remove(); openProject(${i})">← ${backText}</button>
+          <span class="level-counter">${Math.min(step + 1, 7)} / 7</span>
+        </div>
+        <div class="level-progress"><span style="width:${Math.round(((step + 1) / 7) * 100)}%"></span></div>
+        <div class="micro">ZERO · NÍVEL ${step + 1}</div>
+        <h2>${escapeHtml(data.title || '')}</h2>
+        <p class="level-message">${escapeHtml(data.message || '')}</p>
+        ${isFinal ? `
+          <div class="final-plan-card"><div class="micro">ZERO</div><h3>${escapeHtml(data.message || 'Plano concluído.')}</h3><p>${escapeHtml(profile.lang === 'en' ? 'Your choices have been saved to this project.' : profile.lang === 'fr' ? 'Tes choix ont été enregistrés dans ce projet.' : 'As tuas escolhas foram guardadas neste projeto.')}</p></div>
+          <button class="primary-next-level level-finish" onclick="finishProjectLevels(${i})"><span>${profile.lang === 'en' ? 'Finish project plan' : profile.lang === 'fr' ? 'Terminer le plan' : 'Concluir plano do projeto'}</span><b>✓</b></button>
+        ` : `
+          <div class="level-choice-label">${chooseText}</div>
+          <div class="level-options">
+            ${options.map((o, idx) => `
+              <button class="level-option" onclick="chooseLevelOption(${i}, ${step}, '${String(o.id || String.fromCharCode(97 + idx)).replace(/'/g, "\\'")}')">
+                <span class="option-number">${String.fromCharCode(65 + idx)}</span>
+                <span><b>${escapeHtml(o.title || '')}</b><small>${escapeHtml(o.description || '')}</small></span>
+                <em>→</em>
+              </button>`).join('')}
+          </div>
+        `}
+        <div class="level-saved">✓ ${escapeHtml(profile.lang === 'en' ? `${completed} decision(s) saved automatically` : profile.lang === 'fr' ? `${completed} décision(s) enregistrée(s) automatiquement` : `${completed} decisão(ões) guardada(s) automaticamente`)}</div>
+      </div>
+    </div>`);
 }
 
-async function finalizeNextLevel(i){
-  const p=projects[i]; if(!p) return;
-  document.querySelector('#nextLevelOverlay')?.remove();
-  document.body.insertAdjacentHTML('beforeend',`<div class="overlay next-level-overlay" id="nextLevelOverlay"><div class="next-level-card final-loading"><div class="analysis-orbit"><span></span><b>ZERO</b></div><span class="micro">ZERO AI</span><h2>${profile.lang==='en'?'Building your final project kit…':profile.lang==='fr'?'ZERO construit ton kit final…':'A ZERO está a montar o teu projeto final…'}</h2><p>${profile.lang==='en'?'Combining your choices into one practical plan.':profile.lang==='fr'?'ZERO combine tes choix en un plan pratique.':'A combinar todas as tuas escolhas num plano prático.'}</p><div class="analysis-tasks"><div class="analysis-task"><i>1</i><span>${profile.lang==='en'?'Final positioning':profile.lang==='fr'?'Positionnement final':'Posicionamento final'}</span><em></em></div><div class="analysis-task"><i>2</i><span>${profile.lang==='en'?'Marketing plan':profile.lang==='fr'?'Plan marketing':'Plano de marketing'}</span><em></em></div><div class="analysis-task"><i>3</i><span>${profile.lang==='en'?'Launch checklist':profile.lang==='fr'?'Checklist de lancement':'Checklist de lançamento'}</span><em></em></div></div></div></div>`);
-  try{
-    const res=await fetch('/api/groq/finalize-project',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({idea:p.idea,name:p.name,type:p.type,analysis:p.analysis,selections:p.nextLevel.selections,lang:profile.lang})});
-    const data=await res.json().catch(()=>({})); if(!res.ok) throw new Error(data.error||'Falha ao finalizar.');
-    p.nextLevel.final=data; p.nextLevel.level=6; p.progress=100; p.updated=new Date().toISOString(); save();
-    document.querySelector('#nextLevelOverlay')?.remove(); renderFinalBlueprint(i);
-  }catch(e){
-    document.querySelector('#nextLevelOverlay')?.remove(); toast(profile.lang==='en'?`Could not finish: ${e.message}`:profile.lang==='fr'?`Impossible de terminer : ${e.message}`:`Não foi possível finalizar: ${e.message}`);
+async function chooseLevelOption(i, step, optionId) {
+  const p = projects[i];
+  if (!p || !p.levels?.[step]) return;
+  const option = (p.levels[step].options || []).find(o => String(o.id) === String(optionId));
+  if (!option) return;
+
+  p.choices = p.choices || {};
+  p.choices[p.levels[step].level || ['name','positioning','differentiator','marketing','business','launch'][step]] = {
+    id: option.id,
+    title: option.title,
+    description: option.description
+  };
+  p.levelStep = Math.min(step + 1, 6);
+
+  if (step === 0 && option.title) p.name = option.title;
+  p.updated = new Date().toISOString();
+  p.progress = Math.max(Number(p.progress) || 10, Math.round(((step + 2) / 8) * 100));
+  activity.push({ title: `${p.name} · ${p.levels[step].title || 'Nível seguinte'}`, time: new Date().toLocaleString(), icon: '✓' });
+  save();
+
+  if (step >= 5) {
+    await openNextLevel(i, 6);
+  } else {
+    await openNextLevel(i, step + 1);
   }
 }
 
-function renderFinalBlueprint(i){
-  const p=projects[i]; const f=p?.nextLevel?.final; if(!p||!f) return;
-  const list=(arr)=>Array.isArray(arr)&&arr.length?`<ul>${arr.map(x=>`<li>${escapeHtml(typeof x==='string'?x:(x.title||x.text||''))}</li>`).join('')}</ul>`:'<p class="muted-inline">—</p>';
-  const title=profile.lang==='en'?'Your project is ready':profile.lang==='fr'?'Ton projet est prêt':'O teu projeto está pronto';
-  document.body.insertAdjacentHTML('beforeend',`<div class="overlay project-overlay" id="finalBlueprintOverlay"><div class="project-detail final-blueprint"><div class="detail-head"><button class="detail-back" onclick="document.querySelector('#finalBlueprintOverlay')?.remove()">← ${L().back}</button><button class="detail-close" onclick="document.querySelector('#finalBlueprintOverlay')?.remove()">×</button></div><div class="detail-symbol">✓</div><span class="micro">ZERO • ${profile.lang==='en'?'PROJECT KIT':profile.lang==='fr'?'KIT PROJET':'KIT DO PROJETO'}</span><h2>${escapeHtml(f.name||p.name)}</h2><p>${escapeHtml(f.positioning||f.summary||'')}</p><div class="final-score"><strong>${escapeHtml(String(f.readinessScore??100))}</strong><span>/100 ${profile.lang==='en'?'ready':profile.lang==='fr'?'prêt':'pronto'}</span></div><div class="analysis-grid"><section class="analysis-card analysis-wide"><div class="micro">${profile.lang==='en'?'Positioning':profile.lang==='fr'?'Positionnement':'Posicionamento'}</div><h3>${escapeHtml(f.positioning||'')}</h3><p>${escapeHtml(f.oneLiner||'')}</p></section><section class="analysis-card"><div class="micro">${profile.lang==='en'?'Differentiator':profile.lang==='fr'?'Différenciateur':'Diferencial'}</div><h3>${escapeHtml(f.differentiator||'')}</h3></section><section class="analysis-card"><div class="micro">${profile.lang==='en'?'Offer':profile.lang==='fr'?'Offre':'Oferta'}</div><h3>${escapeHtml(f.offer||'')}</h3></section><section class="analysis-card analysis-wide"><div class="micro">Marketing</div><h3>${escapeHtml(f.marketing?.strategy||'')}</h3>${list(f.marketing?.channels)}</section><section class="analysis-card"><div class="micro">${profile.lang==='en'?'Content ideas':profile.lang==='fr'?'Idées de contenu':'Ideias de conteúdo'}</div>${list(f.marketing?.contentIdeas)}</section><section class="analysis-card"><div class="micro">${profile.lang==='en'?'Business model':profile.lang==='fr'?'Modèle économique':'Modelo de negócio'}</div><h3>${escapeHtml(f.businessModel?.model||'')}</h3><p>${escapeHtml(f.businessModel?.pricingLogic||'')}</p></section><section class="analysis-card analysis-wide"><div class="micro">${profile.lang==='en'?'MVP checklist':profile.lang==='fr'?'Checklist MVP':'Checklist MVP'}</div>${list(f.mvp)}</section><section class="analysis-card analysis-wide"><div class="micro">${profile.lang==='en'?'First 30 days':profile.lang==='fr'?'30 premiers jours':'Primeiros 30 dias'}</div>${list(f.first30Days)}</section><section class="analysis-card analysis-wide first-move"><div class="micro">${profile.lang==='en'?'Do this first':profile.lang==='fr'?'À faire en premier':'Faz isto primeiro'}</div><h3>${escapeHtml(f.firstMove||'')}</h3><p>${escapeHtml(f.why||'')}</p></section></div><div class="analysis-footer-note">${escapeHtml(f.note||'As recomendações da ZERO são orientações estratégicas geradas por IA e devem ser validadas no mundo real.')}</div></div></div>`);
+function finishProjectLevels(i) {
+  const p = projects[i];
+  if (!p) return;
+  p.levelStep = 7;
+  p.progress = 100;
+  p.completed = true;
+  p.updated = new Date().toISOString();
+  save();
+  document.querySelector('#levelOverlay')?.remove();
+  toast(profile.lang === 'en' ? 'Project plan completed.' : profile.lang === 'fr' ? 'Plan du projet terminé.' : 'Plano do projeto concluído.');
+  openProject(i);
 }
 
 async function submitCoach(i) {

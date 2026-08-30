@@ -21,8 +21,8 @@ app.get('/api/health', (req, res) => {
 // current Groq project/key can actually access, so an unavailable model
 // does not break the whole ZERO analysis feature.
 const preferredModels = [
-  'openai/gpt-oss-120b',
   'openai/gpt-oss-20b',
+  'openai/gpt-oss-120b',
   'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant'
 ];
@@ -69,7 +69,7 @@ function getGroqKey() {
   return String(process.env.GROQ_API_KEY || '').trim();
 }
 
-async function groq(messages, key) {
+async function groq(messages, key, options = {}) {
   const cleanKey = String(key || '').trim();
   if (!cleanKey) throw new Error('GROQ_API_KEY is missing. Check the .env file.');
 
@@ -90,7 +90,7 @@ async function groq(messages, key) {
         body: JSON.stringify({
           model,
           temperature: 0.35,
-          max_tokens: 6500,
+          max_tokens: Math.min(Number(options.maxTokens) || 1800, 1800),
           messages,
           response_format: { type: 'json_object' }
         }),
@@ -116,7 +116,7 @@ async function groq(messages, key) {
           body: JSON.stringify({
             model,
             temperature: 0.35,
-            max_tokens: 6500,
+            max_tokens: Math.min(Number(options.maxTokens) || 1800, 1800),
             messages
           }),
           signal: retryController.signal
@@ -255,6 +255,87 @@ Score viability from 0 to 100 based on clarity of problem, plausibility of audie
 
 
 
+const LEVELS = [
+  { key: 'name', title: 'Nome', goal: 'Escolher um nome forte para o projeto.' },
+  { key: 'positioning', title: 'Posicionamento', goal: 'Escolher como o projeto deve ser percebido.' },
+  { key: 'differentiator', title: 'Diferencial', goal: 'Encontrar uma vantagem clara perante alternativas.' },
+  { key: 'marketing', title: 'Marketing', goal: 'Escolher uma estratégia simples para conseguir os primeiros utilizadores.' },
+  { key: 'business', title: 'Modelo de negócio', goal: 'Escolher a forma mais adequada de gerar receita.' },
+  { key: 'launch', title: 'Lançamento', goal: 'Definir os primeiros passos para validar e lançar.' },
+  { key: 'final', title: 'Plano final', goal: 'Juntar as decisões num plano executável.' }
+];
+
+function compactProjectContext(project, completed, step) {
+  const a = project?.analysis || {};
+  return {
+    idea: String(project?.idea || '').slice(0, 1200),
+    type: project?.type || '',
+    originalName: project?.name || '',
+    problem: String(a.problem || '').slice(0, 500),
+    audience: String(a.targetAudience || '').slice(0, 500),
+    solution: String(a.solution || '').slice(0, 500),
+    market: String(a.market?.summary || '').slice(0, 500),
+    competitors: (Array.isArray(a.competitors) ? a.competitors : []).slice(0, 4).map(c => ({ name: c?.name || '', weakness: String(c?.weakness || '').slice(0, 250) })),
+    completed: completed || {},
+    currentLevel: LEVELS[step]?.key || 'name'
+  };
+}
+
+app.post('/api/groq/level', async (req, res) => {
+  const key = getGroqKey();
+  const { project, step, lang } = req.body || {};
+  const currentStep = Math.max(0, Math.min(6, Number(step) || 0));
+  const language = languageName(lang || 'pt');
+
+  if (!key) return res.status(503).json({ error: 'GROQ_API_KEY is not configured on the server.' });
+  if (!String(project?.idea || '').trim()) return res.status(400).json({ error: 'Idea is required.' });
+
+  const level = LEVELS[currentStep];
+  try {
+    const data = await groq([
+      {
+        role: 'system',
+        content: `You are ZERO, a concise project-building strategist. Respond ONLY with valid JSON in ${language}.
+
+The user has already completed the main project analysis. This is ONE small decision level. Never ask the user to type a long answer. Give 3 to 5 concrete choices that can be selected with one click.
+
+Rules:
+- Use only the project context supplied. Do not claim live browsing or verified market research.
+- Do not invent exact statistics, market sizes, revenue, prices or legal facts.
+- Make choices clearly different and specific to this project, not generic startup advice.
+- Keep each option short enough for a card/button.
+- For the name level, suggest memorable names and a one-line reason.
+- For positioning, suggest distinct positioning statements.
+- For differentiator, suggest specific advantages.
+- For marketing, suggest practical acquisition strategies.
+- For business, suggest realistic initial revenue models without fabricated prices.
+- For launch, suggest concrete first validation/launch moves.
+- For final, return a concise final plan based on the completed choices.
+
+Return exactly:
+{
+  "level":"${level.key}",
+  "title":"${level.title}",
+  "message":"one short sentence",
+  "options":[{"id":"a","title":"short choice","description":"one short explanation"},{"id":"b","title":"short choice","description":"one short explanation"},{"id":"c","title":"short choice","description":"one short explanation"}],
+  "nextLabel":"short label for continuing"
+}
+For the final level, options may be empty and message should summarize the recommended plan.`
+      },
+      {
+        role: 'user',
+        content: JSON.stringify(compactProjectContext(project, project?.choices || {}, currentStep))
+      }
+    ], key, { maxTokens: 950 });
+
+    res.json({ ...data, step: currentStep, totalLevels: LEVELS.length });
+  } catch (err) {
+    const message = err.message || 'Could not generate the next level.';
+    const status = /rate limit|tokens per minute|TPM|too many requests/i.test(message) ? 429 : 500;
+    res.status(status).json({ error: message });
+  }
+});
+
 app.post('/api/groq/coach', async (req, res) => {
   const key = getGroqKey();
   const { idea, name, type, stages, answers, step, lang } = req.body || {};
@@ -269,77 +350,20 @@ app.post('/api/groq/coach', async (req, res) => {
     const data = await groq([
       {
         role: 'system',
-        content: `You are ZERO, a practical project-building coach. Respond ONLY with valid JSON in ${language}.
-
-The user has already provided a project idea. Do not ask a long list of questions. Use the current answer and existing project context to improve the current stage and prepare the next stage.
-
-Return exactly:
-{
-  "stage":{"title":"short stage title","description":"clear practical description","goal":"what should be achieved","deliverable":"concrete output"},
-  "nextStage":{"title":"short next stage title","description":"clear practical description","goal":"what should be achieved","deliverable":"concrete output"},
-  "coachMessage":"one short useful message"
-}
-
-Be specific to the project. Do not invent factual market data.`
+        content: `You are ZERO, a practical project-building coach. Respond ONLY with valid JSON in ${language}. Use short output. Return exactly: {"stage":{"title":"short title","description":"short description","goal":"short goal","deliverable":"short deliverable"},"nextStage":{"title":"short title","description":"short description","goal":"short goal","deliverable":"short deliverable"},"coachMessage":"one short message"}. Do not invent factual market data.`
       },
       {
         role: 'user',
-        content: JSON.stringify({
-          project: { idea, name, type },
-          currentStage: stages?.[currentStep] || {},
-          allStages: Array.isArray(stages) ? stages : [],
-          answers: Array.isArray(answers) ? answers : [],
-          step: currentStep
-        })
+        content: JSON.stringify({ project: { idea: String(idea).slice(0,1200), name, type }, currentStage: stages?.[currentStep] || {}, answer: Array.isArray(answers) ? answers[currentStep] : '', step: currentStep })
       }
-    ], key);
+    ], key, { maxTokens: 650 });
 
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message || 'Could not coach the project.' });
+    const message = err.message || 'Could not coach the project.';
+    const status = /rate limit|tokens per minute|TPM|too many requests/i.test(message) ? 429 : 500;
+    res.status(status).json({ error: message });
   }
-});
-
-
-app.post('/api/groq/next-level', async (req, res) => {
-  const key = getGroqKey();
-  const { idea, name, type, analysis, nextLevel, level, lang } = req.body || {};
-  if (!key) return res.status(503).json({ error: 'GROQ_API_KEY is not configured on the server.' });
-  if (!String(idea || '').trim()) return res.status(400).json({ error: 'Idea is required.' });
-  const current = Math.max(0, Math.min(5, Number(level) || 0));
-  const language = languageName(lang || 'pt');
-  const levelNames = ['name','positioning','differentiator','marketing','business','launch'];
-  const levelName = levelNames[current];
-  const instructions = {
-    name: 'Generate 6 short, memorable and distinctive project names. Avoid obvious clones and generic names.',
-    positioning: 'Generate 5 different positioning directions. Each must say how the project should be perceived and for whom.',
-    differentiator: 'Generate 5 strong differentiation angles that are plausible for this project and useful against alternatives.',
-    marketing: 'Generate 5 practical first-marketing strategies. Prefer concrete channels, message angles and low-cost ways to reach first users.',
-    business: 'Generate 5 sensible business/revenue model options. Include a simple pricing logic without inventing market facts or exact competitor prices.',
-    launch: 'Generate 5 practical launch approaches with a clear first validation action and a sensible channel.'
-  };
-  try {
-    const data = await groq([
-      { role:'system', content:`You are ZERO, an AI project strategist. Respond ONLY with valid JSON in ${language}. The user gave one idea; do the thinking for them. This is level ${current+1}/6 (${levelName}). ${instructions[levelName]} Use the existing analysis and previous selections. Do not invent factual statistics. Return exactly: {"choices":[{"title":"short title","description":"why this fits this specific project","icon":"one short symbol"},{"title":"...","description":"...","icon":"..."},{"title":"...","description":"...","icon":"..."},{"title":"...","description":"...","icon":"..."},{"title":"...","description":"...","icon":"..."}]} Make each choice genuinely different, not reworded duplicates.` },
-      { role:'user', content: JSON.stringify({ idea, name, type, analysis, previousSelections: nextLevel?.selections || {}, level: current }) }
-    ], key);
-    res.json(data);
-  } catch (err) { res.status(500).json({ error: err.message || 'Could not generate next level.' }); }
-});
-
-app.post('/api/groq/finalize-project', async (req, res) => {
-  const key = getGroqKey();
-  const { idea, name, type, analysis, selections, lang } = req.body || {};
-  if (!key) return res.status(503).json({ error: 'GROQ_API_KEY is not configured on the server.' });
-  if (!String(idea || '').trim()) return res.status(400).json({ error: 'Idea is required.' });
-  const language = languageName(lang || 'pt');
-  try {
-    const data = await groq([
-      { role:'system', content:`You are ZERO. The user started with one idea and then selected one option at each of six levels: name, positioning, differentiator, marketing, business model and launch. Combine those choices into a polished, practical final project kit. Respond ONLY with valid JSON in ${language}. Do not invent factual statistics. Return exactly: {"name":"final chosen name","summary":"short project summary","positioning":"clear positioning","oneLiner":"one-line pitch","differentiator":"clear differentiation","offer":"what is actually offered","marketing":{"strategy":"practical strategy","channels":["...","...","..."],"contentIdeas":["...","...","..."]},"businessModel":{"model":"chosen model","pricingLogic":"simple pricing logic; avoid invented market prices"},"mvp":["...","...","...","...","..."],"first30Days":["week/action...","...","...","..."],"firstMove":"one concrete action to do next","why":"why it matters","readinessScore":0,"note":"short AI guidance/validation note"}. The score is a heuristic from 0 to 100, not a factual prediction.` },
-      { role:'user', content: JSON.stringify({ idea, initialName:name, type, analysis, selections }) }
-    ], key);
-    res.json(data);
-  } catch (err) { res.status(500).json({ error: err.message || 'Could not finalize project.' }); }
 });
 
 const port = process.env.PORT || 3000;
