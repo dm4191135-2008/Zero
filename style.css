@@ -1818,3 +1818,148 @@ body[data-theme="light"] .zero-next-level-card{background:#fff;border-color:rgba
 body[data-theme="light"] .level-card{background:#fff;border-color:rgba(0,0,0,.08);box-shadow:0 24px 70px rgba(20,30,50,.16)}
 body[data-theme="light"] .level-option{background:#f8fafc;border-color:rgba(0,0,0,.08)}
 body[data-theme="light"] .level-option:hover{background:#eef5ff}
+
+
+/* =========================================
+   SUBSCRIÇÃO ZERO
+   ========================================= */
+
+.zero-subscription-banner{
+  width:min(680px,100%);
+  margin:20px auto 8px;
+  padding:14px 16px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  background:rgba(255,255,255,.035);
+  backdrop-filter:blur(10px);
+}
+.zero-subscription-banner > div{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.zero-subscription-banner strong{
+  font-size:14px;
+  line-height:1.2;
+}
+.zero-subscription-banner span{
+  font-size:12px;
+  line-height:1.45;
+  opacity:.68;
+}
+.zero-subscription-banner.expired{
+  border-color:rgba(255,255,255,.16);
+}
+.zero-subscription-banner .text-action{
+  flex:0 0 auto;
+  border:0;
+  background:transparent;
+  color:inherit;
+  font:inherit;
+  font-size:13px;
+  font-weight:700;
+  cursor:pointer;
+  padding:8px 4px;
+}
+.zero-subscription-overlay{
+  position:fixed;
+  inset:0;
+  z-index:10000;
+  display:grid;
+  place-items:center;
+  padding:22px;
+  background:rgba(3,5,9,.72);
+  backdrop-filter:blur(14px);
+}
+.zero-subscription-modal{
+  position:relative;
+  width:min(430px,100%);
+  padding:30px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:24px;
+  background:var(--panel, #0b1018);
+  box-shadow:0 24px 80px rgba(0,0,0,.35);
+}
+.zero-subscription-close{
+  position:absolute;
+  top:12px;
+  right:12px;
+  width:36px;
+  height:36px;
+  border:0;
+  border-radius:50%;
+  background:rgba(255,255,255,.06);
+  color:inherit;
+  font-size:24px;
+  cursor:pointer;
+}
+.zero-subscription-mark{
+  font-size:11px;
+  letter-spacing:.18em;
+  opacity:.58;
+  margin-bottom:14px;
+}
+.zero-subscription-kicker{
+  font-size:11px;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  opacity:.55;
+  margin-bottom:8px;
+}
+.zero-subscription-modal h2{
+  margin:0 42px 10px 0;
+  font-size:28px;
+  line-height:1.08;
+}
+.zero-subscription-copy{
+  margin:0;
+  font-size:14px;
+  line-height:1.6;
+  opacity:.72;
+}
+.zero-subscription-plan{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  margin:22px 0;
+  padding:16px;
+  border-radius:16px;
+  border:1px solid rgba(255,255,255,.09);
+  background:rgba(255,255,255,.035);
+}
+.zero-subscription-plan strong{font-size:15px;}
+.zero-subscription-plan span{
+  font-size:12px;
+  opacity:.62;
+}
+.zero-subscription-btn{
+  width:100%;
+}
+.zero-subscription-note{
+  margin:12px 0 0;
+  text-align:center;
+  font-size:11px;
+  line-height:1.5;
+  opacity:.5;
+}
+@media (max-width:560px){
+  .zero-subscription-banner{
+    margin-top:16px;
+    padding:13px 14px;
+  }
+  .zero-subscription-modal{
+    padding:24px;
+    border-radius:20px;
+  }
+  .zero-subscription-modal h2{
+    font-size:24px;
+  }
+}
+body[data-theme="light"] .zero-subscription-overlay{
+  background:rgba(245,247,250,.74);
+}

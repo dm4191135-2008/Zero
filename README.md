@@ -37,3 +37,28 @@ Abrir `index.html` diretamente com `file://` não é suficiente para uma PWA ins
 O ID `llama-3.3-70b-versatile` continua listado pela Groq, mas a tua mensagem de erro indica que a tua chave/projeto não tinha acesso a esse modelo. Esta versão evita depender de um único ID: consulta os modelos acessíveis pela chave e usa um modelo permitido.
 
 Se a chave devolver 401/403, cria uma nova chave no GroqCloud e coloca-a no `.env`.
+
+
+## Subscrição mensal ZERO
+
+A versão atual usa este modelo:
+- 1.º mês grátis a partir da primeira utilização real do ZERO;
+- depois, acesso às funções de criação/análise/níveis apenas com subscrição mensal;
+- projetos já guardados e perfil continuam visíveis;
+- a renovação mensal deve ser feita pelo sistema de pagamentos da Fawi.
+
+### Configuração Fawi
+
+No `app.js`, define o `ZERO_FAwi_MONTHLY_PRICE_ID` com o Price ID mensal criado no Fawi Office.
+
+A integração da chamada de pagamento está isolada no adaptador:
+
+`window.ZERO_FAWI_SUBSCRIBE`
+
+O tutor deve ligar aí a chamada oficial da API Fawi usada pelo vosso ambiente e devolver:
+
+`{ success: true, subscriptionUntil: "2026-10-31T..." }`
+
+Quando a Fawi confirmar o pagamento, o ZERO libera o acesso até `subscriptionUntil`.
+
+Importante: o estado guardado no `localStorage` é apenas o mecanismo de interface/trial. Para cobrança e bloqueio reais entre dispositivos, a subscrição deve ser validada no backend através da conta/identidade da Fawi.

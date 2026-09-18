@@ -41,6 +41,262 @@ let activity = Array.isArray(readJSON('zero-activity', []))
 
 let active = 'home';
 
+/* =========================================
+   SUBSCRIÇÃO ZERO
+   1.º mês gratuito + mensalidade Fawi
+   ========================================= */
+
+const ZERO_TRIAL_DAYS = 30;
+/*
+ * Coloca aqui o Price ID mensal criado no Fawi Office.
+ * Não inventamos um ID real: este valor é um marcador para configuração.
+ */
+const ZERO_FAwi_MONTHLY_PRICE_ID = 'COLOCAR_PRICE_ID_MENSAL_AQUI';
+
+let billing = {
+  trialStartedAt: '',
+  trialEndsAt: '',
+  subscriptionUntil: '',
+  ...readJSON('zero-billing-v1', {})
+};
+
+function saveBilling() {
+  localStorage.setItem(
+    'zero-billing-v1',
+    JSON.stringify(billing)
+  );
+}
+
+function daysLeft(until) {
+  const end = new Date(until).getTime();
+  if (!Number.isFinite(end)) return 0;
+  return Math.max(0, Math.ceil((end - Date.now()) / 86400000));
+}
+
+function startTrial() {
+  if (billing.trialStartedAt || billing.subscriptionUntil) return;
+  const started = new Date();
+  const ends = new Date(started.getTime() + ZERO_TRIAL_DAYS * 86400000);
+
+  billing.trialStartedAt = started.toISOString();
+  billing.trialEndsAt = ends.toISOString();
+  saveBilling();
+}
+
+function hasActiveSubscription() {
+  return Boolean(
+    billing.subscriptionUntil &&
+    new Date(billing.subscriptionUntil).getTime() > Date.now()
+  );
+}
+
+function hasActiveTrial() {
+  return Boolean(
+    billing.trialEndsAt &&
+    new Date(billing.trialEndsAt).getTime() > Date.now()
+  );
+}
+
+function hasZeroAccess() {
+  return hasActiveSubscription() || hasActiveTrial();
+}
+
+function subscriptionLabel() {
+  const l = L();
+
+  if (hasActiveSubscription()) {
+    return profile.lang === 'en'
+      ? 'Subscription active'
+      : profile.lang === 'fr'
+        ? 'Abonnement actif'
+        : 'Subscrição ativa';
+  }
+
+  if (hasActiveTrial()) {
+    const d = daysLeft(billing.trialEndsAt);
+    return profile.lang === 'en'
+      ? `Free month · ${d} day(s) remaining`
+      : profile.lang === 'fr'
+        ? `Mois gratuit · ${d} jour(s) restant(s)`
+        : `1.º mês grátis · ${d} dia(s) restante(s)`;
+  }
+
+  return l.subscriptionRequired;
+}
+
+function showSubscriptionGate() {
+  const l = L();
+
+  document.querySelector('#zeroSubscriptionOverlay')?.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'zeroSubscriptionOverlay';
+  overlay.className = 'zero-subscription-overlay';
+
+  overlay.innerHTML = `
+    <div class="zero-subscription-modal" role="dialog" aria-modal="true">
+      <button
+        class="zero-subscription-close"
+        onclick="closeSubscriptionGate()"
+        aria-label="${l.close}"
+      >×</button>
+
+      <div class="zero-subscription-mark">ZERO</div>
+
+      <div class="zero-subscription-kicker">
+        ${l.subscriptionKicker}
+      </div>
+
+      <h2>${l.subscriptionTitle}</h2>
+
+      <p class="zero-subscription-copy">
+        ${l.subscriptionCopy}
+      </p>
+
+      <div class="zero-subscription-plan">
+        <strong>${l.monthlyPlan}</strong>
+        <span>${l.monthlyPlanSub}</span>
+      </div>
+
+      <button
+        class="primary-action zero-subscription-btn"
+        onclick="subscribeToZero()"
+      >
+        ${l.subscribe}
+      </button>
+
+      <p class="zero-subscription-note">
+        ${l.subscriptionNote}
+      </p>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+function closeSubscriptionGate() {
+  document.querySelector('#zeroSubscriptionOverlay')?.remove();
+}
+
+function ensureZeroAccess() {
+  if (!billing.trialStartedAt && !billing.subscriptionUntil) {
+    startTrial();
+  }
+
+  if (hasZeroAccess()) {
+    return true;
+  }
+
+  showSubscriptionGate();
+  return false;
+}
+
+async function subscribeToZero() {
+  const l = L();
+
+  /*
+   * A chamada real da Fawi deve ser ligada pelo tutor através deste adaptador:
+   *
+   * window.ZERO_FAWI_SUBSCRIBE = async ({ priceId }) => {
+   *   // chamada oficial da API Fawi
+   *   // devolver { success: true, subscriptionUntil: ISO_DATE }
+   * };
+   *
+   * Não inventamos uma API Fawi que não está presente no projeto.
+   */
+
+  if (typeof window.ZERO_FAWI_SUBSCRIBE !== 'function') {
+    toast(l.fawiNotConfigured);
+    return;
+  }
+
+  const button = document.querySelector('.zero-subscription-btn');
+  if (button) {
+    button.disabled = true;
+    button.textContent = l.processing;
+  }
+
+  try {
+    const result = await window.ZERO_FAWI_SUBSCRIBE({
+      priceId: ZERO_FAwi_MONTHLY_PRICE_ID
+    });
+
+    if (!result?.success) {
+      throw new Error(result?.error || 'Subscription was not completed.');
+    }
+
+    const until = result.subscriptionUntil
+      ? new Date(result.subscriptionUntil)
+      : new Date(Date.now() + 30 * 86400000);
+
+    billing.subscriptionUntil = until.toISOString();
+    saveBilling();
+
+    closeSubscriptionGate();
+    render();
+    toast(l.subscriptionActivated);
+  } catch (error) {
+    toast(error?.message || l.subscriptionFailed);
+    if (button) {
+      button.disabled = false;
+      button.textContent = l.subscribe;
+    }
+  }
+}
+
+function subscriptionBanner() {
+  const l = L();
+
+  if (!billing.trialStartedAt && !billing.subscriptionUntil) {
+    return `
+      <div class="zero-subscription-banner trial-ready">
+        <div>
+          <strong>${l.firstMonthFree}</strong>
+          <span>${l.firstMonthFreeSub}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  if (hasActiveSubscription()) {
+    return `
+      <div class="zero-subscription-banner active">
+        <div>
+          <strong>${l.subscriptionActive}</strong>
+          <span>${l.monthlyRenewal}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  if (hasActiveTrial()) {
+    const d = daysLeft(billing.trialEndsAt);
+    return `
+      <div class="zero-subscription-banner trial">
+        <div>
+          <strong>${l.firstMonthFree}</strong>
+          <span>${profile.lang === 'en'
+            ? `${d} day(s) left in your free month.`
+            : profile.lang === 'fr'
+              ? `${d} jour(s) restant(s) de ton mois gratuit.`
+              : `Faltam ${d} dia(s) para terminar o teu mês grátis.`}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="zero-subscription-banner expired">
+      <div>
+        <strong>${l.subscriptionExpired}</strong>
+        <span>${l.subscribeToContinue}</span>
+      </div>
+      <button class="text-action" onclick="showSubscriptionGate()">${l.subscribe}</button>
+    </div>
+  `;
+}
+
+
 const t = {
   pt: {
     home: 'Início',
@@ -118,7 +374,27 @@ const t = {
     deleteData: 'Eliminar todos os dados',
     deleteDataConfirm:
       'Tens a certeza que queres eliminar todos os teus dados? Esta ação não pode ser desfeita.',
-    dataDeleted: 'Todos os dados foram eliminados.'
+    dataDeleted: 'Todos os dados foram eliminados.',
+
+    subscriptionRequired: 'Subscrição necessária',
+    close: 'Fechar',
+    subscriptionKicker: 'ZERO PRO',
+    subscriptionTitle: 'O teu mês grátis terminou',
+    subscriptionCopy: 'Continua a usar o ZERO com uma subscrição mensal. O primeiro mês é gratuito.',
+    monthlyPlan: 'Subscrição mensal',
+    monthlyPlanSub: 'Renovação mensal pela Fawi',
+    subscribe: 'Subscrever',
+    subscriptionNote: 'A compra é feita pelo sistema de pagamentos da Fawi.',
+    fawiNotConfigured: 'A ligação de pagamento Fawi ainda não foi configurada.',
+    processing: 'A processar…',
+    subscriptionActivated: 'Subscrição ativada.',
+    subscriptionFailed: 'Não foi possível concluir a subscrição.',
+    firstMonthFree: '1.º mês grátis',
+    firstMonthFreeSub: 'Começa a usar sem pagar.',
+    subscriptionActive: 'Subscrição ativa',
+    monthlyRenewal: 'A tua mensalidade está ativa.',
+    subscriptionExpired: 'Mês grátis terminado',
+    subscribeToContinue: 'Subscreve para continuar.'
   },
 
   en: {
@@ -197,7 +473,27 @@ const t = {
     deleteData: 'Delete all data',
     deleteDataConfirm:
       'Are you sure you want to delete all your data? This cannot be undone.',
-    dataDeleted: 'All data has been deleted.'
+    dataDeleted: 'All data has been deleted.',
+
+    subscriptionRequired: 'Subscription required',
+    close: 'Close',
+    subscriptionKicker: 'ZERO PRO',
+    subscriptionTitle: 'Your free month has ended',
+    subscriptionCopy: 'Keep using ZERO with a monthly subscription. Your first month is free.',
+    monthlyPlan: 'Monthly subscription',
+    monthlyPlanSub: 'Monthly renewal through Fawi',
+    subscribe: 'Subscribe',
+    subscriptionNote: 'Payment is handled through Fawi.',
+    fawiNotConfigured: 'The Fawi payment connection is not configured yet.',
+    processing: 'Processing…',
+    subscriptionActivated: 'Subscription activated.',
+    subscriptionFailed: 'The subscription could not be completed.',
+    firstMonthFree: '1st month free',
+    firstMonthFreeSub: 'Start using ZERO without paying.',
+    subscriptionActive: 'Subscription active',
+    monthlyRenewal: 'Your monthly subscription is active.',
+    subscriptionExpired: 'Free month ended',
+    subscribeToContinue: 'Subscribe to continue.'
   },
 
   fr: {
@@ -289,7 +585,27 @@ const t = {
     deleteData: 'Supprimer toutes les données',
     deleteDataConfirm:
       'Es-tu sûr de vouloir supprimer toutes tes données ? Cette action est irréversible.',
-    dataDeleted: 'Toutes les données ont été supprimées.'
+    dataDeleted: 'Toutes les données ont été supprimées.',
+
+    subscriptionRequired: 'Abonnement requis',
+    close: 'Fermer',
+    subscriptionKicker: 'ZERO PRO',
+    subscriptionTitle: 'Ton mois gratuit est terminé',
+    subscriptionCopy: 'Continue à utiliser ZERO avec un abonnement mensuel. Le premier mois est gratuit.',
+    monthlyPlan: 'Abonnement mensuel',
+    monthlyPlanSub: 'Renouvellement mensuel via Fawi',
+    subscribe: 'S’abonner',
+    subscriptionNote: 'Le paiement passe par le système Fawi.',
+    fawiNotConfigured: 'La connexion de paiement Fawi n’est pas encore configurée.',
+    processing: 'Traitement…',
+    subscriptionActivated: 'Abonnement activé.',
+    subscriptionFailed: 'Impossible de terminer l’abonnement.',
+    firstMonthFree: '1er mois gratuit',
+    firstMonthFreeSub: 'Commence à utiliser ZERO gratuitement.',
+    subscriptionActive: 'Abonnement actif',
+    monthlyRenewal: 'Ton abonnement mensuel est actif.',
+    subscriptionExpired: 'Mois gratuit terminé',
+    subscribeToContinue: 'Abonne-toi pour continuer.'
   }
 };
 
@@ -548,6 +864,8 @@ function home() {
         <p>
           ${l.greeting}
         </p>
+
+        ${subscriptionBanner()}
 
         <div class="idea-input-wrap">
 
@@ -1012,6 +1330,8 @@ function focusIdea() {
 }
 
 async function startProjectFromHome() {
+  if (!ensureZeroAccess()) return;
+
   const input = document.querySelector('#homeIdea');
   const idea = input?.value.trim();
 
@@ -1301,6 +1621,8 @@ function openProject(i) {
 }
 
 async function openNextLevel(i, requestedStep) {
+  if (!ensureZeroAccess()) return;
+
   const p = projects[i];
   if (!p) return;
 
@@ -1391,6 +1713,8 @@ function renderNextLevel(i, step, data) {
 }
 
 async function chooseLevelOption(i, step, optionId) {
+  if (!ensureZeroAccess()) return;
+
   const p = projects[i];
   if (!p || !p.levels?.[step]) return;
   const option = (p.levels[step].options || []).find(o => String(o.id) === String(optionId));
@@ -1431,6 +1755,8 @@ function finishProjectLevels(i) {
 }
 
 async function submitCoach(i) {
+  if (!ensureZeroAccess()) return;
+
   const p = projects[i];
 
   if (!p) return;
@@ -2043,6 +2369,16 @@ function deleteAllData() {
   localStorage.removeItem(
     'zero-activity'
   );
+
+  localStorage.removeItem(
+    'zero-billing-v1'
+  );
+
+  billing = {
+    trialStartedAt: '',
+    trialEndsAt: '',
+    subscriptionUntil: ''
+  };
 
   /*
    * Repor o estado da ZERO.
